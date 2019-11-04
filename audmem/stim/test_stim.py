@@ -46,7 +46,7 @@ while point < total_dur*fs:
 noise = np.concatenate(noise)
 
 # trigger
-trigger_dur = .0005  # in seconds
+trigger_dur = .05  # in seconds
 trigger_width = int(np.floor(trigger_dur*fs))
 total_samp = n_sampREF*(nb_reps+1) + n_sampISI
 trigger = np.zeros(shape=(total_samp), dtype=np.float) +.5
