@@ -7,6 +7,18 @@ Created on Wed Jun 27 11:07:59 2018
 Repeated white noise stimuli creation
 
 For a second ERP test.
+
+Create 16-bit (signed) 44.1kHz no header mono wavefiles
+same design as Andrillon et al. 2015 for one block
+3 trial types: RefRN, RN and noise, separated by 2-3s of silence
+For RefRN and RN, stimuli are 0.2s separated by 0.3s noise and 5 repetitions
+Outputs:
+  1. the noise for one block (5.4min)
+  2. the indicator that is a state-change indicator of trial/silence onsets
+  3. a tab delimited text file listing the orders of conditions.
+
+Usage:
+  python test_stim3.py path/2/output/folder random_seed
 """
 
 import numpy as np
@@ -16,35 +28,12 @@ import datetime, os
 import pandas as pd
 import argparse
 
-# Create 16-bit (signed) 44.1kHz no header mono wavefiles
-# same design as Andrillon et al. 2015 for one block
-# 3 trial types: RefRN, RN and noise, separated by 2-3s of silence
-# For RefRN and RN, stimuli are 0.2s separated by 0.3s noise and 5 repetitions
-# outputs:
-# 1. the noise for one block (5.4min)
-# 2. the indicator that is a state-change indicator of trial/silence onsets
-# 3. a tab delimited text file listing the orders of conditions.
 
-# params
-fs = 44100  # Hertz
-Stim_dur = 0.2  # seconds
-ISI_dur = 0.3  # seconds
-ITI_min, ITI_max = 2., 3.  # seconds
-trial_dur = 2.5 #seconds
-n_reps = 5 # reps of noise within trials
-block = {"RefRN": 16, "RN": 16, "noise": 32}
-
-# functions
 def get_n_samples(dur_s, fs):
     return int(np.floor(fs*dur_s))
 
 
-def add_silence(list_stim, dur_s, fs):
-    n_samp = get_n_samples(fs, dur_s)
-    list_stim.append([0.5]*n_samp)
-
-
-def make_stim_trial(array_stim, ISI_dur):
+def make_stim_trial(array_stim, ISI_dur, n_reps, fs):
     list_trial = []
     n_sampISI = get_n_samples(ISI_dur, fs)
     for i in range(n_reps):
@@ -53,7 +42,7 @@ def make_stim_trial(array_stim, ISI_dur):
     return np.concatenate(list_trial)
 
 
-def make_noise_trial(trial_dur):
+def make_noise_trial(trial_dur, fs):
     n_samp = get_n_samples(trial_dur, fs)
     return np.random.randn(n_samp)
 
@@ -62,28 +51,49 @@ def mydatetime(dt):
     return dt.strftime('%Y-%m-%d-%H-%M-%S')
 
 
-def create_all_stims(randomseed):
+def create_all_stims(random_seed, fs=44100, stim_dur=.2,
+                     ISI_dur=.3, ITI_min=2., ITI_max=3., 
+                     n_reps=5, block=None):
+    """
+    Params:
+      fs: sampling frequency in Hz
+
+      stim_dur: repeated noise duration (s)
+      ISI_dur: duration of noise between two repetitions of repeated noise (s)
+      ITI_min, ITI_max: range of duration of silence between two trials (s)
+        (uniformly distributed in this range)
+      n_reps: number of noise repetitions within trial
+      block: dict indicating the number of blocks of each type desired
+    """
+    if block is None:
+        block = {"RefRN": 16, "RN": 16, "noise": 32}
+    trial_dur = n_reps*(ISI_dur+stim_dur)
+
     # prepare orders of trials in block
     cond_list = []
     for trial_type in block.keys():
         cond_list+=[trial_type]*block[trial_type]
     random.shuffle(cond_list)
 
-    # set seed and generate RefRN
-    np.random.seed(randomseed)
-    n_sampStim = get_n_samples(Stim_dur, fs)
+    # set randomseed
+    np.random.seed(random_seed)
+
+    # get number of sample for repeated noise template
+    n_sampStim = get_n_samples(stim_dur, fs)
+
+    # generate RefRN template
     REF = np.random.randn(n_sampStim)
 
     # generate one block
     trials = []
     for trial_type in cond_list:
         if trial_type == "RefRN":
-            trials.append(make_stim_trial(REF, ISI_dur))
+            trials.append(make_stim_trial(REF, ISI_dur, n_reps, fs))
         elif trial_type == "RN":
             RN = np.random.randn(n_sampStim)
-            trials.append(make_stim_trial(RN, ISI_dur))
+            trials.append(make_stim_trial(RN, ISI_dur, n_reps, fs))
         else:
-            trials.append(make_noise_trial(trial_dur))
+            trials.append(make_noise_trial(trial_dur, fs))
 
     # adds silence between trials and end
     for t in range(len(trials)):
@@ -133,6 +143,7 @@ def create_all_stims(randomseed):
 
     return df_design, noise, indicator
 
+
 def save_sound(sound_array, path):
     soundfile.write(path,
                     sound_array,
@@ -146,16 +157,16 @@ def save_design(df, path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--outputsfolder', metavar='path', required=True,
+    parser.add_argument('output_folder', metavar='path',
                         help='the path to the folder for all outputs')
-    parser.add_argument('--randomseed', type=int, required=True,
-                            help='random generator seed')
+    parser.add_argument('random_seed', type=int,
+                        help='random generator seed')
     args = parser.parse_args()
-    print(args)
-    df_design, noise, indicator = create_all_stims(args.randomseed)
+    # print(args)
+    df_design, noise, indicator = create_all_stims(args.random_seed)
     dt = mydatetime(datetime.datetime.now())
-    fileroot = os.path.join(args.outputsfolder, dt+'_seed'+str(args.randomseed))
+    fileroot = os.path.join(args.output_folder, dt+'_seed'+str(args.random_seed))
 
-    save_design(df_design, fileroot+'_design.dat')
+    save_design(df_design, fileroot+'_design.csv')
     save_sound(noise, fileroot+'_noise.wav')
     save_sound(indicator, fileroot+'_indicator.wav')
