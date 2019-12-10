@@ -27,6 +27,7 @@ import random
 import datetime, os
 import pandas as pd
 import argparse
+import json
 
 
 def get_n_samples(dur_s, fs):
@@ -141,7 +142,11 @@ def create_all_stims(random_seed, fs=44100, stim_dur=.2,
     noise = noise.astype(np.int16)
     indicator = indicator.astype(np.int16)
 
-    return df_design, noise, indicator
+    params = {'random_seed': random_seed, 'fs': fs, 
+              'stim_dur': stim_dur, 'ISI_dur': ISI_dur,
+              'ITI_min': ITI_min, 'ITI_max': ITI_max, 
+              'n_reps': n_reps, 'block': block}
+    return df_design, noise, indicator, params
 
 
 def save_sound(sound_array, path):
@@ -155,6 +160,12 @@ def save_design(df, path):
     df.to_csv(path, sep='\t', index=False)
 
 
+def save_params(params, path):
+  with open(path, 'w') as out_file:
+    #yaml.dump(params, out_file, default_flow_style=False)
+    json.dump(params, out_file)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('output_folder', metavar='path',
@@ -163,10 +174,11 @@ if __name__ == '__main__':
                         help='random generator seed')
     args = parser.parse_args()
     # print(args)
-    df_design, noise, indicator = create_all_stims(args.random_seed)
+    df_design, noise, indicator, params = create_all_stims(args.random_seed)
     dt = mydatetime(datetime.datetime.now())
     fileroot = os.path.join(args.output_folder, dt+'_seed'+str(args.random_seed))
 
-    save_design(df_design, fileroot+'_design.csv')
+    save_design(df_design, fileroot+'_design.txt')
     save_sound(noise, fileroot+'_noise.wav')
     save_sound(indicator, fileroot+'_indicator.wav')
+    save_params(params, fileroot+'_params.txt')
